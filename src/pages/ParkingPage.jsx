@@ -33,7 +33,7 @@ function ParkingPage() {
   }, [slots]);
 
   if (!currentUser) {
-    return <Navigate to="/entry" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const onReserve = (slotId) => {
@@ -47,6 +47,7 @@ function ParkingPage() {
 
   const focusedSlotId = selectedSlotId ?? nearestSlotId;
   const focusedSlot = slots.find((slot) => slot.id === focusedSlotId);
+  const hasSlots = Array.isArray(slots) && slots.length > 0;
 
   return (
     <motion.div
@@ -57,12 +58,16 @@ function ParkingPage() {
       transition={{ duration: 0.35 }}
     >
       <div className="parking-canvas-wrap">
-        <ParkingScene
-          slots={slots}
-          focusedSlot={focusedSlotId}
-          onSelect={setSelectedSlot}
-          onReserve={onReserve}
-        />
+        {hasSlots ? (
+          <ParkingScene
+            slots={slots}
+            focusedSlot={focusedSlotId}
+            onSelect={setSelectedSlot}
+            onReserve={onReserve}
+          />
+        ) : (
+          <div className="scene-loading">Loading parking layout...</div>
+        )}
       </div>
 
       <aside className="dashboard glass-card">

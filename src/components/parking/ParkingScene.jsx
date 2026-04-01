@@ -42,7 +42,7 @@ function NeonSlot({ slot, isFocused, onSelect, onReserve }) {
     meshRef.current.scale.lerp(new THREE.Vector3(target, target, target), 0.15);
   });
 
-  const color = slot.occupied ? "#ff3d72" : "#27f0a6";
+  const color = slot.occupied ? "red" : "green";
   const emissive = slot.occupied ? "#a30039" : "#03a46f";
 
   return (
@@ -118,16 +118,21 @@ function SceneContent({ slots, focusedSlot, onSelect, onReserve }) {
       <color attach="background" args={["#070b16"]} />
       <fog attach="fog" args={["#070b16", 22, 56]} />
 
-      <ambientLight intensity={0.25} />
-      <directionalLight position={[8, 15, 8]} intensity={1.15} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[5, 10, 5]} intensity={1.5} castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048} />
       <spotLight position={[-10, 12, -10]} angle={0.42} penumbra={0.6} intensity={70} color="#56d9ff" castShadow />
       <spotLight position={[10, 10, 10]} angle={0.38} penumbra={0.7} intensity={62} color="#3cffb3" castShadow />
+
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="green" />
+      </mesh>
 
       <AnimatedLightStreaks />
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[48, 48]} />
-        <meshStandardMaterial color="#0a1021" metalness={0.3} roughness={0.72} />
+        <meshStandardMaterial color="#222" metalness={0.3} roughness={0.72} />
       </mesh>
 
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
@@ -158,15 +163,19 @@ function SceneContent({ slots, focusedSlot, onSelect, onReserve }) {
 }
 
 function ParkingScene({ slots, focusedSlot, onSelect, onReserve }) {
+  const safeSlots = Array.isArray(slots) ? slots : [];
+
   return (
-    <Canvas shadows camera={{ position: [9, 9, 12], fov: 45 }}>
+    <div className="parking-canvas" style={{ height: "100vh", width: "100%" }}>
+      <Canvas shadows camera={{ position: [0, 6, 10], fov: 60 }}>
       <SceneContent
-        slots={slots}
+        slots={safeSlots}
         focusedSlot={focusedSlot}
         onSelect={onSelect}
         onReserve={onReserve}
       />
-    </Canvas>
+      </Canvas>
+    </div>
   );
 }
 

@@ -1,12 +1,16 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import useParkingStore from "../store/parkingStore";
 
 const VIDEO_PATH = "/parking-bg.mp4";
 
 function LandingPage() {
   const [scrollY, setScrollY] = useState(0);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [form, setForm] = useState({ userName: "", carNumber: "", duration: "" });
+  const [errors, setErrors] = useState({});
+  const setCurrentUser = useParkingStore((state) => state.setCurrentUser);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -14,6 +18,42 @@ function LandingPage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  const onChange = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: "" }));
+  };
+
+  const onSubmit = (event) => {
+    event.preventDefault();
+    const next = {};
+
+    if (!form.userName.trim()) {
+      next.userName = "User name is required";
+    }
+
+    if (!form.carNumber.trim()) {
+      next.carNumber = "Car number is required";
+    }
+
+    if (!form.duration) {
+      next.duration = "Parking duration is required";
+    }
+
+    setErrors(next);
+
+    if (Object.keys(next).length) {
+      return;
+    }
+
+    setCurrentUser({
+      userName: form.userName.trim(),
+      carNumber: form.carNumber.trim().toUpperCase(),
+      duration: form.duration
+    });
+
+    navigate("/parking");
+  };
 
   return (
     <motion.div
@@ -55,13 +95,47 @@ function LandingPage() {
           <p>
             Enter your details, detect the nearest available bay, and reserve in a futuristic live 3D parking grid.
           </p>
-          <button
-            type="button"
-            className="neon-btn"
-            onClick={() => navigate("/entry")}
-          >
-            Enter Parking
-          </button>
+          <form className="home-form" onSubmit={onSubmit}>
+            <label>
+              User Name
+              <input
+                value={form.userName}
+                onChange={(e) => onChange("userName", e.target.value)}
+                placeholder="e.g. Alex Morgan"
+              />
+              {errors.userName && <span className="field-error">{errors.userName}</span>}
+            </label>
+
+            <label>
+              Car Number
+              <input
+                value={form.carNumber}
+                onChange={(e) => onChange("carNumber", e.target.value)}
+                placeholder="e.g. MH12AB1234"
+              />
+              {errors.carNumber && <span className="field-error">{errors.carNumber}</span>}
+            </label>
+
+            <label>
+              Parking Timing
+              <select
+                value={form.duration}
+                onChange={(e) => onChange("duration", e.target.value)}
+              >
+                <option value="">Select timing</option>
+                <option value="1 Hour">1 Hour</option>
+                <option value="2 Hours">2 Hours</option>
+                <option value="4 Hours">4 Hours</option>
+                <option value="8 Hours">8 Hours</option>
+                <option value="Full Day">Full Day</option>
+              </select>
+              {errors.duration && <span className="field-error">{errors.duration}</span>}
+            </label>
+
+            <button type="submit" className="neon-btn">
+              Enter Parking
+            </button>
+          </form>
         </motion.section>
 
         <section className="glass-card feature-grid">

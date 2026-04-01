@@ -1,6 +1,16 @@
 import { create } from "zustand";
 
 const ENTRY_POINT = { x: -9, z: -9 };
+const USER_STORAGE_KEY = "smartParking.currentUser";
+
+function getStoredUser() {
+  try {
+    const raw = window.localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 function buildDefaultSlots() {
   const cols = 4;
@@ -25,12 +35,17 @@ function buildDefaultSlots() {
 }
 
 const useParkingStore = create((set, get) => ({
-  currentUser: null,
+  currentUser: getStoredUser(),
   slots: buildDefaultSlots(),
   selectedSlotId: null,
   nearestSlotId: null,
 
   setCurrentUser: (user) => {
+    try {
+      window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    } catch {
+      // ignore localStorage failures in restricted browser contexts
+    }
     set({ currentUser: user });
   },
 
