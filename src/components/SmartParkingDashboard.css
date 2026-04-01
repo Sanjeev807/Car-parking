@@ -1,0 +1,181 @@
+.dashboard-container {
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.app-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.app-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2bb7ff, #00d4a0);
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.7vw, 1.75rem);
+}
+
+.close-button {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(8, 17, 33, 0.7);
+  color: #e9f6ff;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.main-content-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+}
+
+.panel-card {
+  padding: 1rem;
+}
+
+.occupancy-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.9rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.occupancy-count {
+  color: #6af5b8;
+  font-weight: 700;
+}
+
+.pathing-guide {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.path-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #31c6ff, #00b98f);
+}
+
+.map-scene-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #0a1326;
+}
+
+.base-map-asset {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dynamic-data-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.map-slot-data {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 8px;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 0.78rem;
+  color: #fff;
+  background: rgba(8, 15, 28, 0.8);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.free-green {
+  border-color: rgba(112, 255, 170, 0.85);
+  box-shadow: 0 0 14px rgba(112, 255, 170, 0.35);
+}
+
+.occupied-red {
+  border-color: rgba(255, 90, 112, 0.85);
+  box-shadow: 0 0 14px rgba(255, 90, 112, 0.35);
+}
+
+.availability-bubble {
+  border-radius: 999px;
+  padding: 0 0.42rem;
+  font-size: 0.72rem;
+  background: rgba(123, 255, 189, 0.2);
+}
+
+.car-model-overlay {
+  font-size: 0.7rem;
+  color: #ffdce3;
+}
+
+.slot-top-row-A {
+  left: 30%;
+  top: 34%;
+}
+
+.slot-top-row-B {
+  left: 43%;
+  top: 32%;
+}
+
+.slot-mid-row-A {
+  left: 37%;
+  top: 53%;
+}
+
+.slot-mid-row-B {
+  left: 52%;
+  top: 51%;
+}
+
+.slot-mid-row-C {
+  left: 64%;
+  top: 49%;
+}
+
+.slot-low-row-A {
+  left: 47%;
+  top: 66%;
+}
+
+.slot-low-row-B {
+  left: 62%;
+  top: 64%;
+}
+
+.slot-bottom-right {
+  left: 77%;
+  top: 42%;
+}
+
+@media (max-width: 980px) {
+  .main-content-row {
+    grid-template-columns: 1fr;
+  }
+}

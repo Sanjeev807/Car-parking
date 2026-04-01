@@ -1,0 +1,53 @@
+{
+  "totalSlots": 12,
+  "slots": [
+    {
+      "slotId": "P1",
+      "position": "top-row-A",
+      "status": "occupied",
+      "carModel": "Audi Sedan"
+    },
+    {
+      "slotId": "P2",
+      "position": "top-row-B",
+      "status": "occupied",
+      "carModel": "Nissan Leaf"
+    },
+    {
+      "slotId": "P3",
+      "position": "mid-row-A",
+      "status": "free",
+      "availabilityCount": "3"
+    },
+    {
+      "slotId": "P4",
+      "position": "mid-row-B",
+      "status": "occupied",
+      "carModel": "Acura Sedan"
+    },
+    {
+      "slotId": "P5",
+      "position": "mid-row-C",
+      "status": "occupied",
+      "carModel": "Audi Sedan"
+    },
+    {
+      "slotId": "P6",
+      "position": "low-row-A",
+      "status": "occupied",
+      "carModel": "Acura Sedan"
+    },
+    {
+      "slotId": "P7",
+      "position": "low-row-B",
+      "status": "free",
+      "availabilityCount": "3"
+    },
+    {
+      "slotId": "P12",
+      "position": "bottom-right",
+      "status": "free",
+      "availabilityCount": "P12"
+    }
+  ]
+}
