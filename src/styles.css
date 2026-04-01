@@ -25,6 +25,7 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background: #050915;
+  isolation: isolate;
 }
 
 .page-shell.video-fallback .bg-video {
@@ -38,14 +39,14 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  z-index: -2;
+  z-index: 0;
   animation: subtleZoom 22s ease-in-out infinite alternate;
 }
 
 .bg-overlay {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   pointer-events: none;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.9));
 }
@@ -53,7 +54,7 @@ body {
 .bg-glow {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 1;
   pointer-events: none;
   background:
     radial-gradient(circle at 20% 25%, rgba(47, 173, 255, 0.19), transparent 42%),
@@ -63,11 +64,14 @@ body {
 .scroll-blur-layer {
   position: fixed;
   inset: 0;
+  z-index: 2;
   pointer-events: none;
   background: rgba(2, 8, 22, 0.1);
 }
 
 .content-scroll {
+  position: relative;
+  z-index: 3;
   min-height: 210vh;
   padding: 12vh clamp(1rem, 2vw, 2rem) 8rem;
   display: grid;
