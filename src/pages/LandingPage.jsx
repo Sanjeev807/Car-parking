@@ -4,6 +4,15 @@ import { useNavigate } from "react-router-dom";
 import useParkingStore from "../store/parkingStore";
 
 const VIDEO_PATH = "/parking-bg.mp4";
+const HALF_HOUR_RATE = 50;
+const TIMING_OPTIONS = [
+  { label: "30 Minutes", halfHours: 1 },
+  { label: "1 Hour", halfHours: 2 },
+  { label: "2 Hours", halfHours: 4 },
+  { label: "4 Hours", halfHours: 8 },
+  { label: "8 Hours", halfHours: 16 },
+  { label: "Full Day", halfHours: 24 }
+];
 
 function LandingPage() {
   const [scrollY, setScrollY] = useState(0);
@@ -46,11 +55,27 @@ function LandingPage() {
       return;
     }
 
-    setCurrentUser({
+    const selectedTiming = TIMING_OPTIONS.find((option) => option.label === form.duration);
+    const halfHours = selectedTiming?.halfHours ?? 0;
+    const totalAmount = halfHours * HALF_HOUR_RATE;
+
+    const userPayload = {
       userName: form.userName.trim(),
       carNumber: form.carNumber.trim().toUpperCase(),
-      duration: form.duration
-    });
+      duration: form.duration,
+      timing: form.duration,
+      halfHours,
+      halfHourRate: HALF_HOUR_RATE,
+      amount: totalAmount
+    };
+
+    setCurrentUser(userPayload);
+
+    try {
+      window.localStorage.setItem("smartParking.user", JSON.stringify(userPayload));
+    } catch {
+      // Ignore storage failures in restricted browser modes.
+    }
 
     navigate("/parking");
   };
@@ -123,14 +148,24 @@ function LandingPage() {
                 onChange={(e) => onChange("duration", e.target.value)}
               >
                 <option value="">Select timing</option>
-                <option value="1 Hour">1 Hour</option>
-                <option value="2 Hours">2 Hours</option>
-                <option value="4 Hours">4 Hours</option>
-                <option value="8 Hours">8 Hours</option>
-                <option value="Full Day">Full Day</option>
+                {TIMING_OPTIONS.map((option) => (
+                  <option key={option.label} value={option.label}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               {errors.duration && <span className="field-error">{errors.duration}</span>}
             </label>
+
+            {form.duration && (
+              <div className="rounded-lg border border-cyan-500/40 bg-slate-900/70 px-4 py-3 text-sm text-cyan-100">
+                <p>Rate: Rs.{HALF_HOUR_RATE} per 30 minutes</p>
+                <p>
+                  Total: Rs.
+                  {(TIMING_OPTIONS.find((option) => option.label === form.duration)?.halfHours ?? 0) * HALF_HOUR_RATE}
+                </p>
+              </div>
+            )}
 
             <button type="submit" className="neon-btn">
               Enter Parking

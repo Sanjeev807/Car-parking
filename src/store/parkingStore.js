@@ -99,6 +99,27 @@ const useParkingStore = create((set, get) => ({
 
     set({ nearestSlotId: nearest.id, selectedSlotId: nearest.id });
     return nearest.id;
+  },
+
+  exitSlot: (slotId) => {
+    const { slots } = get();
+    const updatedSlots = slots.map((slot) => {
+      if (slot.id !== slotId) {
+        return slot;
+      }
+      return {
+        ...slot,
+        occupied: false,
+        userDetails: null
+      };
+    });
+
+    set({
+      slots: updatedSlots,
+      selectedSlotId: null
+    });
+
+    return true;
   }
 }));
 
