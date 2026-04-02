@@ -87,6 +87,7 @@ function HomeFormPage() {
             Parking Timing
             <select value={form.timing} onChange={(e) => onChange("timing", e.target.value)}>
               <option value="">Select timing</option>
+              <option value="30 Minutes">30 Minutes</option>
               <option value="1 Hour">1 Hour</option>
               <option value="2 Hours">2 Hours</option>
               <option value="4 Hours">4 Hours</option>

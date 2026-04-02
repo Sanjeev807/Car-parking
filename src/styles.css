@@ -363,6 +363,20 @@ h1 {
   width: 100%;
 }
 
+.dashboard .neon-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+
+.dashboard-action-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: rgba(221, 236, 255, 0.74);
+  line-height: 1.35;
+}
+
 .toast {
   position: absolute;
   left: 50%;

@@ -17,6 +17,7 @@ function buildSlots() {
       id: idx + 1,
       label: `P${idx + 1}`,
       occupied: idx === 1 || idx === 4,
+      occupiedBy: idx === 1 || idx === 4 ? "system" : null,
       position: [startX + col * gap, 0.5, startZ + row * gap]
     };
   });
@@ -25,8 +26,8 @@ function buildSlots() {
 function Parking3DPage() {
   const [toast, setToast] = useState("");
   const [slots, setSlots] = useState(() => buildSlots());
-  const [activeBooking, setActiveBooking] = useState(null);
-  const [bookingAnimationKey, setBookingAnimationKey] = useState(0);
+  const [activeTransition, setActiveTransition] = useState(null);
+  const [animationKey, setAnimationKey] = useState(0);
 
   const user = useMemo(() => {
     try {
@@ -41,41 +42,74 @@ function Parking3DPage() {
     return <Navigate to="/" replace />;
   }
 
-  const onReserve = (slotId) => {
-    if (activeBooking) {
+  const onSlotAction = (slotId) => {
+    if (activeTransition) {
       return;
     }
 
     const selected = slots.find((slot) => slot.id === slotId);
-    if (!selected || selected.occupied) {
+    if (!selected) {
       return;
     }
 
-    setActiveBooking({ slotId });
-    setBookingAnimationKey((prev) => prev + 1);
+    if (!selected.occupied) {
+      setActiveTransition({ type: "entry", slotId });
+      setAnimationKey((prev) => prev + 1);
+      return;
+    }
+
+    if (selected.occupiedBy !== "user") {
+      return;
+    }
+
+    const confirmExit = window.confirm(`Do you want to exit from slot ${selected.label}?`);
+    if (!confirmExit) {
+      return;
+    }
+
+    setActiveTransition({ type: "exit", slotId });
+    setAnimationKey((prev) => prev + 1);
   };
 
-  const onCarArrive = (slotId) => {
-    setSlots((prev) =>
-      prev.map((slot) => (slot.id === slotId ? { ...slot, occupied: true } : slot))
-    );
-    setActiveBooking(null);
-    setToast(`Slot reserved for ${user.userName}`);
-    window.setTimeout(() => setToast(""), 2000);
+  const onAnimationComplete = (slotId, type) => {
+    if (type === "entry") {
+      setSlots((prev) =>
+        prev.map((slot) =>
+          slot.id === slotId
+            ? { ...slot, occupied: true, occupiedBy: "user" }
+            : slot
+        )
+      );
+      setToast(`Slot reserved for ${user.userName}`);
+    } else {
+      setSlots((prev) =>
+        prev.map((slot) =>
+          slot.id === slotId
+            ? { ...slot, occupied: false, occupiedBy: null }
+            : slot
+        )
+      );
+      setToast(`Car exited from P${slotId}`);
+    }
+
+    setActiveTransition(null);
+    window.setTimeout(() => setToast(""), 2200);
   };
 
   const occupiedCount = slots.filter((slot) => slot.occupied).length;
+  const userBookedSlot = slots.find((slot) => slot.occupiedBy === "user") ?? null;
 
   return (
     <div className="parking-page">
       <div className="parking-canvas-wrap">
         <ParkingSceneCore
           slots={slots}
-          onReserve={onReserve}
-          movingSlotId={activeBooking?.slotId ?? null}
-          movingCarKey={bookingAnimationKey}
-          onCarArrive={onCarArrive}
-          canReserve={!activeBooking}
+          onSlotAction={onSlotAction}
+          movingSlotId={activeTransition?.slotId ?? null}
+          movingType={activeTransition?.type ?? null}
+          movingCarKey={animationKey}
+          onAnimationComplete={onAnimationComplete}
+          isInteractionLocked={Boolean(activeTransition)}
         />
       </div>
 
@@ -88,7 +122,25 @@ function Parking3DPage() {
         <p>User: {user.userName}</p>
         <p>Car: {user.carNumber}</p>
         <p>Timing: {user.timing}</p>
-        <p>Status: {activeBooking ? `Parking in progress to P${activeBooking.slotId}` : "Ready"}</p>
+        <p>
+          Status: {activeTransition ? `${activeTransition.type === "entry" ? "Parking" : "Exiting"} in progress ${slots.find((slot) => slot.id === activeTransition.slotId)?.label ?? ""}` : "Ready"}
+        </p>
+
+        <button
+          type="button"
+          className="neon-btn"
+          disabled={!userBookedSlot || Boolean(activeTransition)}
+          onClick={() => {
+            if (userBookedSlot) {
+              onSlotAction(userBookedSlot.id);
+            }
+          }}
+        >
+          {userBookedSlot ? `Exit ${userBookedSlot.label}` : "No User Slot To Exit"}
+        </button>
+        <p className="dashboard-action-note">
+          You can also click your occupied slot in the 3D view to request exit.
+        </p>
       </aside>
 
       {toast && <div className="toast">{toast}</div>}

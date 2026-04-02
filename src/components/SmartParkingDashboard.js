@@ -181,6 +181,29 @@ const samplePath = (path, t) => {
   ];
 };
 
+const buildBookingPath = (slotPosition) => [
+  ENTRY_POINT,
+  [ENTRY_POINT[0], 0.25, slotPosition[2] + 4],
+  [slotPosition[0], 0.25, slotPosition[2] + 4],
+  [slotPosition[0], 0.25, slotPosition[2]]
+];
+
+const samplePolyline = (points, progress) => {
+  const clamped = clamp01(progress);
+  const segments = points.length - 1;
+  const segFloat = clamped * segments;
+  const segIndex = Math.min(Math.floor(segFloat), segments - 1);
+  const local = segFloat - segIndex;
+  const from = points[segIndex];
+  const to = points[segIndex + 1];
+
+  return [
+    from[0] + (to[0] - from[0]) * local,
+    from[1] + (to[1] - from[1]) * local,
+    from[2] + (to[2] - from[2]) * local
+  ];
+};
+
 const CameraController = ({ isTransitioning }) => {
   const { camera } = useThree();
 
@@ -303,7 +326,7 @@ const CarModel = ({ opacity = 1, isBraking = false }) => {
   );
 };
 
-const ParkingSlot = ({ slot, onClick }) => {
+const ParkingSlot = ({ slot, onClick, canInteract }) => {
   const isOccupied = slot.status === "occupied";
   const color = isOccupied ? "#ff2e4d" : "#0ff180";
 
@@ -311,7 +334,7 @@ const ParkingSlot = ({ slot, onClick }) => {
     <group position={slot.position}>
       <NeonBox position={[0, 0.05, 0]} color={color} />
       <mesh
-        onClick={() => !isOccupied && onClick(slot.id)}
+        onClick={() => !isOccupied && canInteract && onClick(slot.id)}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0.02, 0]}
       >
@@ -584,9 +607,71 @@ const LaneCars = ({ parkedCars }) => {
   );
 };
 
+const BookingCarAnimation = ({ targetSlot, animationKey, onArrive }) => {
+  const carRef = useRef(null);
+  const progressRef = useRef(0);
+  const previousPointRef = useRef(ENTRY_POINT);
+  const arrivedRef = useRef(false);
+
+  const path = useMemo(() => {
+    if (!targetSlot) {
+      return null;
+    }
+    return buildBookingPath(targetSlot.position);
+  }, [targetSlot, animationKey]);
+
+  useEffect(() => {
+    progressRef.current = 0;
+    previousPointRef.current = ENTRY_POINT;
+    arrivedRef.current = false;
+
+    if (carRef.current) {
+      carRef.current.position.set(ENTRY_POINT[0], ENTRY_POINT[1], ENTRY_POINT[2]);
+      carRef.current.rotation.set(0, 0, 0);
+    }
+  }, [animationKey, targetSlot?.id]);
+
+  useFrame((_, delta) => {
+    if (!carRef.current || !path) {
+      return;
+    }
+
+    progressRef.current = Math.min(1, progressRef.current + delta * 0.24);
+    const currentPoint = samplePolyline(path, progressRef.current);
+    const previousPoint = previousPointRef.current;
+
+    carRef.current.position.set(currentPoint[0], currentPoint[1], currentPoint[2]);
+
+    const dx = currentPoint[0] - previousPoint[0];
+    const dz = currentPoint[2] - previousPoint[2];
+    if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+      carRef.current.rotation.y = Math.atan2(dx, dz);
+    }
+
+    previousPointRef.current = currentPoint;
+
+    if (progressRef.current >= 1 && !arrivedRef.current) {
+      arrivedRef.current = true;
+      onArrive?.(targetSlot.id);
+    }
+  });
+
+  if (!targetSlot) {
+    return null;
+  }
+
+  return (
+    <group ref={carRef} position={ENTRY_POINT}>
+      <CarModel isBraking={false} />
+    </group>
+  );
+};
+
 export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotBooked }) {
   const [triggerAnimation, setTriggerAnimation] = useState(false);
   const [slots, setSlots] = useState(() => cleanSlots(generateParkingSlots()));
+  const [bookingAnimation, setBookingAnimation] = useState(null);
+  const [bookingAnimationKey, setBookingAnimationKey] = useState(0);
 
   useEffect(() => {
     setTriggerAnimation(true);
@@ -615,6 +700,10 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
       return;
     }
 
+    if (bookingAnimation) {
+      return;
+    }
+
     const selected = slots.find((slot) => slot.id === id);
     if (!selected || selected.status !== "free") {
       alert("Selected slot is not available.");
@@ -626,10 +715,15 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
       return;
     }
 
+    setBookingAnimation({ slotId: id });
+    setBookingAnimationKey((prev) => prev + 1);
+  };
+
+  const handleBookingAnimationArrive = (slotId) => {
     setSlots((prev) =>
       cleanSlots(
         prev.map((slot) =>
-          slot.id === id
+          slot.id === slotId
             ? {
                 ...slot,
                 status: "occupied",
@@ -640,7 +734,8 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
       )
     );
 
-    onSlotBooked?.(id);
+    setBookingAnimation(null);
+    onSlotBooked?.(slotId);
   };
 
   const occupiedCount = slots.filter((slot) => slot.status === "occupied").length;
@@ -669,7 +764,7 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
         <p style={{ color: "#88a0b5", margin: "0.45rem 0" }}>Road and parking zones are now separated and pillar-safe.</p>
         {bookingDetails && (
           <p style={{ color: "#cfe7ff", margin: 0 }}>
-            {bookingDetails.userName} - {bookingDetails.carNumber} - {bookingDetails.parkingDuration}H
+            {bookingDetails.userName} - {bookingDetails.carNumber} - {bookingDetails.parkingDuration} H
           </p>
         )}
         {bookingDetails?.slotId && <p style={{ color: "#7bffb8", margin: "0.4rem 0 0" }}>Booked Slot: {bookingDetails.slotId}</p>}
@@ -777,8 +872,14 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
 
         <LaneCars parkedCars={parkedCars} />
 
+        <BookingCarAnimation
+          targetSlot={slots.find((slot) => slot.id === bookingAnimation?.slotId)}
+          animationKey={bookingAnimationKey}
+          onArrive={handleBookingAnimationArrive}
+        />
+
         {slots.map((slot) => (
-          <ParkingSlot key={slot.id} slot={slot} onClick={handleBookSlot} />
+          <ParkingSlot key={slot.id} slot={slot} onClick={handleBookSlot} canInteract={!bookingAnimation} />
         ))}
 
         <ContactShadows position={[0, 0, 0]} opacity={0.32} scale={100} blur={2.6} far={14} />

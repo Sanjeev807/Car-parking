@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 const ENTRY_POINT = [0, 0.58, 9.2];
+const EXIT_POINT = [0, 0.58, 11.8];
 const ENTRY_BUFFER_Z = 6.6;
 const MAIN_LANE_X = 0;
 const SLOT_APPROACH_OFFSET_Z = 1.8;
@@ -73,6 +74,26 @@ function buildLanePath(targetSlot) {
   });
 }
 
+function normalizePath(points) {
+  return points.filter((point, index) => {
+    if (index === 0) {
+      return true;
+    }
+    const prev = points[index - 1];
+    return point[0] !== prev[0] || point[2] !== prev[2];
+  });
+}
+
+function buildTravelPath(targetSlot, movingType) {
+  const lanePath = buildLanePath(targetSlot);
+
+  if (movingType === "exit") {
+    return normalizePath([...lanePath].reverse().concat([EXIT_POINT]));
+  }
+
+  return normalizePath(lanePath);
+}
+
 function samplePolyline(points, distances, totalDistance, progress) {
   const safeProgress = Math.max(0, Math.min(1, progress));
 
@@ -113,11 +134,17 @@ function CarModel({ motionRef = null }) {
   const frontRightWheelRef = useRef(null);
   const rearLeftWheelRef = useRef(null);
   const rearRightWheelRef = useRef(null);
+  const headLightLeftRef = useRef(null);
+  const headLightRightRef = useRef(null);
+  const brakeLeftRef = useRef(null);
+  const brakeRightRef = useRef(null);
 
   useFrame((_, delta) => {
-    const meta = motionRef?.current ?? { speed: 0, steer: 0 };
+    const meta = motionRef?.current ?? { speed: 0, steer: 0, brake: 0, accel: 0 };
     const speed = Math.max(0, Math.min(1, meta.speed ?? 0));
     const steer = Math.max(-1, Math.min(1, meta.steer ?? 0));
+    const brake = Math.max(0, Math.min(1, meta.brake ?? 0));
+    const accel = Math.max(0, Math.min(1, meta.accel ?? 0));
 
     const spin = speed * delta * 24;
 
@@ -140,6 +167,22 @@ function CarModel({ motionRef = null }) {
       const bodyRoll = -steer * speed * 0.08;
       bodyRef.current.rotation.z += (bodyRoll - bodyRef.current.rotation.z) * 0.12;
     }
+
+    const targetBrakeIntensity = 0.08 + brake * 1.35;
+    [brakeLeftRef, brakeRightRef].forEach((brakeRef) => {
+      if (!brakeRef.current) {
+        return;
+      }
+      brakeRef.current.emissiveIntensity += (targetBrakeIntensity - brakeRef.current.emissiveIntensity) * 0.2;
+    });
+
+    const targetHeadlightIntensity = Math.max(0.22, Math.min(1.35, 0.42 + speed * 0.38 + accel * 0.52 - brake * 0.3));
+    [headLightLeftRef, headLightRightRef].forEach((headlightRef) => {
+      if (!headlightRef.current) {
+        return;
+      }
+      headlightRef.current.emissiveIntensity += (targetHeadlightIntensity - headlightRef.current.emissiveIntensity) * 0.16;
+    });
   });
 
   return (
@@ -155,6 +198,52 @@ function CarModel({ motionRef = null }) {
       <mesh position={[0, 1.03, -0.08]}>
         <boxGeometry args={[0.95, 0.25, 1.12]} />
         <meshStandardMaterial color="#1a3046" transparent opacity={0.58} />
+      </mesh>
+
+      <mesh position={[-0.56, 0.58, 1.25]} castShadow>
+        <boxGeometry args={[0.2, 0.14, 0.08]} />
+        <meshStandardMaterial
+          ref={headLightLeftRef}
+          color="#d7ecff"
+          emissive="#d7ecff"
+          emissiveIntensity={0.42}
+          metalness={0.45}
+          roughness={0.2}
+        />
+      </mesh>
+      <mesh position={[0.56, 0.58, 1.25]} castShadow>
+        <boxGeometry args={[0.2, 0.14, 0.08]} />
+        <meshStandardMaterial
+          ref={headLightRightRef}
+          color="#d7ecff"
+          emissive="#d7ecff"
+          emissiveIntensity={0.42}
+          metalness={0.45}
+          roughness={0.2}
+        />
+      </mesh>
+
+      <mesh position={[-0.56, 0.56, -1.25]} castShadow>
+        <boxGeometry args={[0.2, 0.14, 0.08]} />
+        <meshStandardMaterial
+          ref={brakeLeftRef}
+          color="#8b0000"
+          emissive="#ff2b2b"
+          emissiveIntensity={0.08}
+          metalness={0.5}
+          roughness={0.26}
+        />
+      </mesh>
+      <mesh position={[0.56, 0.56, -1.25]} castShadow>
+        <boxGeometry args={[0.2, 0.14, 0.08]} />
+        <meshStandardMaterial
+          ref={brakeRightRef}
+          color="#8b0000"
+          emissive="#ff2b2b"
+          emissiveIntensity={0.08}
+          metalness={0.5}
+          roughness={0.26}
+        />
       </mesh>
 
       <group ref={frontLeftWheelRef} position={[-0.68, 0.26, 0.86]}>
@@ -185,33 +274,41 @@ function CarModel({ motionRef = null }) {
   );
 }
 
-function MovingBookingCar({ targetSlot, animateKey, onArrive }) {
+function MovingCar({ targetSlot, movingType, animateKey, onComplete }) {
   const carRef = useRef(null);
   const progressRef = useRef(0);
   const arrivedRef = useRef(false);
   const previousPointRef = useRef(ENTRY_POINT);
   const previousHeadingRef = useRef(0);
-  const motionMetaRef = useRef({ speed: 0, steer: 0 });
+  const motionMetaRef = useRef({ speed: 0, steer: 0, brake: 0, accel: 0 });
+  const previousSpeedRef = useRef(0);
 
   useEffect(() => {
     progressRef.current = 0;
     arrivedRef.current = false;
-    previousPointRef.current = ENTRY_POINT;
+
+    const startPoint =
+      movingType === "exit" && targetSlot
+        ? [targetSlot.position[0], ENTRY_POINT[1], targetSlot.position[2]]
+        : ENTRY_POINT;
+
+    previousPointRef.current = startPoint;
 
     if (carRef.current) {
-      carRef.current.position.set(ENTRY_POINT[0], ENTRY_POINT[1], ENTRY_POINT[2]);
+      carRef.current.position.set(startPoint[0], startPoint[1], startPoint[2]);
       carRef.current.rotation.set(0, 0, 0);
     }
     previousHeadingRef.current = 0;
-    motionMetaRef.current = { speed: 0, steer: 0 };
-  }, [animateKey, targetSlot?.id]);
+    motionMetaRef.current = { speed: 0, steer: 0, brake: 0, accel: 0 };
+    previousSpeedRef.current = 0;
+  }, [animateKey, movingType, targetSlot?.id]);
 
   const pathData = useMemo(() => {
     if (!targetSlot) {
       return null;
     }
 
-    const lanePoints = buildLanePath(targetSlot);
+    const lanePoints = buildTravelPath(targetSlot, movingType);
     const curve = new THREE.CatmullRomCurve3(
       lanePoints.map((point) => new THREE.Vector3(point[0], point[1], point[2])),
       false,
@@ -255,7 +352,7 @@ function MovingBookingCar({ targetSlot, animateKey, onArrive }) {
         return centers;
       }, [])
     };
-  }, [targetSlot, animateKey]);
+  }, [targetSlot, movingType, animateKey]);
 
   useFrame((_, delta) => {
     if (!carRef.current || !pathData) {
@@ -274,6 +371,7 @@ function MovingBookingCar({ targetSlot, animateKey, onArrive }) {
 
     const finalApproachSlowdown = 1 - smoothStep(0.78, 1, currentProgress) * 0.55;
     const speedMultiplier = Math.max(0.28, Math.min(turnSlowdown, finalApproachSlowdown));
+    const slowdownBrake = clamp01((1 - speedMultiplier) * 1.25);
 
     progressRef.current = Math.min(1, progressRef.current + delta * BASE_ANIMATION_SPEED * speedMultiplier);
     const currentPoint = samplePolyline(pathData.points, pathData.distances, pathData.totalDistance, progressRef.current);
@@ -287,27 +385,34 @@ function MovingBookingCar({ targetSlot, animateKey, onArrive }) {
       const currentHeading = Math.atan2(lookX, lookZ);
       const headingDelta = signedAngleDiff(previousHeadingRef.current, currentHeading);
       const planarSpeed = Math.hypot(lookX, lookZ) / Math.max(delta, 0.0001);
+      const speedNormalized = Math.min(1, planarSpeed / 3.8);
+      const accelNormalized = clamp01((speedNormalized - previousSpeedRef.current) * 7.5);
 
       carRef.current.rotation.y = currentHeading;
       previousHeadingRef.current = currentHeading;
       motionMetaRef.current = {
-        speed: Math.min(1, planarSpeed / 3.8),
-        steer: Math.max(-1, Math.min(1, headingDelta / 0.35))
+        speed: speedNormalized,
+        steer: Math.max(-1, Math.min(1, headingDelta / 0.35)),
+        brake: clamp01(slowdownBrake + Math.abs(headingDelta) * 0.9),
+        accel: accelNormalized
       };
+      previousSpeedRef.current = speedNormalized;
     } else {
-      motionMetaRef.current = { speed: 0, steer: 0 };
+      motionMetaRef.current = { speed: 0, steer: 0, brake: slowdownBrake, accel: 0 };
+      previousSpeedRef.current = 0;
     }
 
     previousPointRef.current = currentPoint;
 
     if (progressRef.current >= 1 && !arrivedRef.current) {
       arrivedRef.current = true;
-      motionMetaRef.current = { speed: 0, steer: 0 };
-      onArrive?.(targetSlot.id);
+      motionMetaRef.current = { speed: 0, steer: 0, brake: 0, accel: 0 };
+      previousSpeedRef.current = 0;
+      onComplete?.(targetSlot.id, movingType);
     }
   });
 
-  if (!targetSlot) {
+  if (!targetSlot || !movingType) {
     return null;
   }
 
@@ -376,7 +481,7 @@ function LaneMarkings() {
   );
 }
 
-function ParkingSlot({ slot, onReserve, canReserve }) {
+function ParkingSlot({ slot, onSlotAction, isInteractionLocked }) {
   const [hovered, setHovered] = useState(false);
   const neonPadColor = slot.occupied ? "#ff6f88" : "#71ff9f";
 
@@ -409,8 +514,8 @@ function ParkingSlot({ slot, onReserve, canReserve }) {
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
         onClick={() => {
-          if (!slot.occupied && canReserve) {
-            onReserve(slot.id);
+          if (!isInteractionLocked) {
+            onSlotAction(slot.id);
           }
         }}
       >
@@ -434,7 +539,7 @@ function ParkingSlot({ slot, onReserve, canReserve }) {
   );
 }
 
-function Scene({ slots, onReserve, movingSlotId, movingCarKey, onCarArrive, canReserve }) {
+function Scene({ slots, onSlotAction, movingSlotId, movingType, movingCarKey, onAnimationComplete, isInteractionLocked }) {
   const movingTargetSlot = useMemo(
     () => slots.find((slot) => slot.id === movingSlotId),
     [slots, movingSlotId]
@@ -462,26 +567,52 @@ function Scene({ slots, onReserve, movingSlotId, movingCarKey, onCarArrive, canR
         Entry Gate
       </Text>
 
+      <Text position={[EXIT_POINT[0], 1.2, EXIT_POINT[2] + 0.7]} fontSize={0.3} color="#ffbf8e" anchorX="center" anchorY="middle">
+        Exit
+      </Text>
+
       {slots.map((slot) => (
-        <ParkingSlot key={slot.id} slot={slot} onReserve={onReserve} canReserve={canReserve} />
+        <ParkingSlot key={slot.id} slot={slot} onSlotAction={onSlotAction} isInteractionLocked={isInteractionLocked} />
       ))}
 
       {slots
-        .filter((slot) => slot.occupied)
+        .filter((slot) => slot.occupied && !(movingType === "exit" && slot.id === movingSlotId))
         .map((slot) => (
-          <group key={`parked-${slot.id}`} position={[slot.position[0], 0, slot.position[2]]} rotation={[0, Math.PI, 0]}>
+          <group
+            key={`parked-${slot.id}`}
+            position={[slot.position[0], 0, slot.position[2]]}
+            rotation={[0, Math.PI, 0]}
+            onClick={() => {
+              if (!isInteractionLocked) {
+                onSlotAction(slot.id);
+              }
+            }}
+          >
             <CarModel />
           </group>
         ))}
 
-      <MovingBookingCar targetSlot={movingTargetSlot} animateKey={movingCarKey} onArrive={onCarArrive} />
+      <MovingCar
+        targetSlot={movingTargetSlot}
+        movingType={movingType}
+        animateKey={movingCarKey}
+        onComplete={onAnimationComplete}
+      />
 
       <OrbitControls enablePan={false} minDistance={7} maxDistance={18} target={[0, 0.35, 0]} maxPolarAngle={Math.PI * 0.49} />
     </>
   );
 }
 
-function ParkingSceneCore({ slots, onReserve, movingSlotId, movingCarKey, onCarArrive, canReserve = true }) {
+function ParkingSceneCore({
+  slots,
+  onSlotAction,
+  movingSlotId,
+  movingType,
+  movingCarKey,
+  onAnimationComplete,
+  isInteractionLocked = false
+}) {
   const safeSlots = useMemo(() => (Array.isArray(slots) ? slots : []), [slots]);
 
   return (
@@ -493,11 +624,12 @@ function ParkingSceneCore({ slots, onReserve, movingSlotId, movingCarKey, onCarA
       >
         <Scene
           slots={safeSlots}
-          onReserve={onReserve}
+          onSlotAction={onSlotAction}
           movingSlotId={movingSlotId}
+          movingType={movingType}
           movingCarKey={movingCarKey}
-          onCarArrive={onCarArrive}
-          canReserve={canReserve}
+          onAnimationComplete={onAnimationComplete}
+          isInteractionLocked={isInteractionLocked}
         />
       </Canvas>
     </div>

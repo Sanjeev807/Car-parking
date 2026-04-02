@@ -57,6 +57,7 @@ const BookingForm = ({ onSubmit }) => {
               required
             >
               <option value="">Select duration</option>
+              <option value="0.5">30 Minutes</option>
               <option value="1">1 Hour</option>
               <option value="2">2 Hours</option>
               <option value="3">3 Hours</option>
