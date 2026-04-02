@@ -25,6 +25,8 @@ function buildSlots() {
 function Parking3DPage() {
   const [toast, setToast] = useState("");
   const [slots, setSlots] = useState(() => buildSlots());
+  const [activeBooking, setActiveBooking] = useState(null);
+  const [bookingAnimationKey, setBookingAnimationKey] = useState(0);
 
   const user = useMemo(() => {
     try {
@@ -40,22 +42,26 @@ function Parking3DPage() {
   }
 
   const onReserve = (slotId) => {
-    let reserved = false;
-
-    setSlots((prev) =>
-      prev.map((slot) => {
-        if (slot.id === slotId && !slot.occupied) {
-          reserved = true;
-          return { ...slot, occupied: true };
-        }
-        return slot;
-      })
-    );
-
-    if (reserved) {
-      setToast(`Slot reserved for ${user.userName}`);
-      window.setTimeout(() => setToast(""), 2000);
+    if (activeBooking) {
+      return;
     }
+
+    const selected = slots.find((slot) => slot.id === slotId);
+    if (!selected || selected.occupied) {
+      return;
+    }
+
+    setActiveBooking({ slotId });
+    setBookingAnimationKey((prev) => prev + 1);
+  };
+
+  const onCarArrive = (slotId) => {
+    setSlots((prev) =>
+      prev.map((slot) => (slot.id === slotId ? { ...slot, occupied: true } : slot))
+    );
+    setActiveBooking(null);
+    setToast(`Slot reserved for ${user.userName}`);
+    window.setTimeout(() => setToast(""), 2000);
   };
 
   const occupiedCount = slots.filter((slot) => slot.occupied).length;
@@ -63,7 +69,14 @@ function Parking3DPage() {
   return (
     <div className="parking-page">
       <div className="parking-canvas-wrap">
-        <ParkingSceneCore slots={slots} onReserve={onReserve} />
+        <ParkingSceneCore
+          slots={slots}
+          onReserve={onReserve}
+          movingSlotId={activeBooking?.slotId ?? null}
+          movingCarKey={bookingAnimationKey}
+          onCarArrive={onCarArrive}
+          canReserve={!activeBooking}
+        />
       </div>
 
       <aside className="dashboard glass-card">
@@ -75,6 +88,7 @@ function Parking3DPage() {
         <p>User: {user.userName}</p>
         <p>Car: {user.carNumber}</p>
         <p>Timing: {user.timing}</p>
+        <p>Status: {activeBooking ? `Parking in progress to P${activeBooking.slotId}` : "Ready"}</p>
       </aside>
 
       {toast && <div className="toast">{toast}</div>}
