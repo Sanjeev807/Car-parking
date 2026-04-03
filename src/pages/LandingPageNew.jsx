@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import VideoBackground from "../components/VideoBackground";
@@ -45,7 +44,6 @@ const stats = [
 
 export default function LandingPageNew() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -68,13 +66,13 @@ export default function LandingPageNew() {
   };
 
   return (
-    <div className="relative isolate min-h-screen w-screen overflow-x-hidden bg-slate-950 text-white">
+    <div className="relative isolate min-h-screen w-screen overflow-x-hidden text-white">
       <VideoBackground src="/parking-bg.mp4" />
 
       {/* Hero Section with Full-Screen Video */}
       <section className="relative z-10 flex min-h-screen w-full items-center overflow-hidden">
 
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-slate-950" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-slate-950/60" />
 
         <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-center px-4 sm:px-6 lg:px-8">
           <motion.div
@@ -133,35 +131,12 @@ export default function LandingPageNew() {
             </motion.button>
           </motion.div>
 
-          {/* Email Signup */}
-          <motion.div
-            variants={itemVariants}
-            className="mx-auto max-w-md rounded-xl border border-slate-700/60 bg-slate-900/45 p-6 backdrop-blur-xl"
-          >
-            <p className="text-slate-300 mb-4 font-medium">Get updates and exclusive offers</p>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="flex-1 px-4 py-2 bg-slate-950/80 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 bg-cyan-500 text-slate-950 font-bold rounded-lg hover:bg-cyan-400 transition"
-              >
-                Join
-              </motion.button>
-            </div>
-          </motion.div>
         </motion.div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-slate-950">
+      <section className="relative z-10 bg-slate-950/25 py-20 px-4 backdrop-blur-[1px] sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -193,7 +168,7 @@ export default function LandingPageNew() {
       </section>
 
       {/* Features Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-slate-950">
+      <section className="relative z-10 bg-slate-950/25 py-20 px-4 backdrop-blur-[1px] sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -225,7 +200,7 @@ export default function LandingPageNew() {
       </section>
 
       {/* CTA Section */}
-      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-slate-950">
+      <section className="relative z-10 bg-slate-950/25 py-20 px-4 backdrop-blur-[1px] sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -251,7 +226,7 @@ export default function LandingPageNew() {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-slate-800 bg-slate-950 py-12 px-4 sm:px-6 lg:px-8">
+      <footer className="relative z-10 border-t border-slate-700/70 bg-slate-950/35 py-12 px-4 backdrop-blur-[1px] sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto text-center">
           <p className="text-slate-400 mb-2">© 2024 Smart Parking System. All rights reserved.</p>
           <p className="text-slate-500 text-sm">Making parking smarter, easier, and more affordable.</p>

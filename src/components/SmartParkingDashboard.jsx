@@ -5,6 +5,9 @@ import gsap from "gsap";
 import * as THREE from "three";
 
 const ENTRY_POINT = [0, 0.2, -26];
+const EXIT_POINT = [0, 0.2, 26];
+const ROAD_JUNCTION_Z = 3;
+const ROAD_LANE_X = -3;
 const SLOT_SIZE = { width: 3.6, depth: 6 };
 const SLOT_GAP = { x: 4.6, z: 7.4 };
 const PILLAR_CLEARANCE = 1.4;
@@ -181,27 +184,104 @@ const samplePath = (path, t) => {
   ];
 };
 
-const buildBookingPath = (slotPosition) => [
-  ENTRY_POINT,
-  [ENTRY_POINT[0], 0.25, slotPosition[2] + 4],
-  [slotPosition[0], 0.25, slotPosition[2] + 4],
-  [slotPosition[0], 0.25, slotPosition[2]]
-];
+const buildTravelPath = (slotPosition, mode = "entry") => {
+  if (!slotPosition) {
+    return [];
+  }
 
-const samplePolyline = (points, progress) => {
+  const slotX = slotPosition[0];
+  const slotZ = slotPosition[2];
+  const slotApproachZ = slotZ + 4;
+  const y = 0.25;
+
+  const normalizePath = (points) =>
+    points.filter((point, index) => {
+      if (index === 0) {
+        return true;
+      }
+
+      const prev = points[index - 1];
+      return point[0] !== prev[0] || point[2] !== prev[2];
+    });
+
+  if (mode === "exit") {
+    return normalizePath([
+      [slotX, y, slotZ],
+      [slotX, y, slotApproachZ],
+      [slotX, y, ROAD_JUNCTION_Z],
+      [ROAD_LANE_X, y, ROAD_JUNCTION_Z],
+      [ROAD_LANE_X, y, EXIT_POINT[2] - 4],
+      EXIT_POINT
+    ]);
+  }
+
+  return normalizePath([
+    ENTRY_POINT,
+    [ROAD_LANE_X, y, ENTRY_POINT[2]],
+    [ROAD_LANE_X, y, ROAD_JUNCTION_Z],
+    [slotX, y, ROAD_JUNCTION_Z],
+    [slotX, y, slotApproachZ],
+    [slotX, y, slotZ]
+  ]);
+};
+
+const buildPathDistanceData = (points) => {
+  if (!Array.isArray(points) || points.length < 2) {
+    return { points: points || [], distances: [0], totalDistance: 0 };
+  }
+
+  const distances = [0];
+  for (let index = 1; index < points.length; index += 1) {
+    const prev = points[index - 1];
+    const next = points[index];
+    const segmentDistance = Math.hypot(next[0] - prev[0], next[2] - prev[2]);
+    distances.push(distances[index - 1] + segmentDistance);
+  }
+
+  return {
+    points,
+    distances,
+    totalDistance: distances[distances.length - 1]
+  };
+};
+
+const samplePolylineByDistance = (pathData, progress) => {
+  if (!pathData || !Array.isArray(pathData.points) || pathData.points.length === 0) {
+    return null;
+  }
+
+  const { points, distances, totalDistance } = pathData;
   const clamped = clamp01(progress);
-  const segments = points.length - 1;
-  const segFloat = clamped * segments;
-  const segIndex = Math.min(Math.floor(segFloat), segments - 1);
-  const local = segFloat - segIndex;
-  const from = points[segIndex];
-  const to = points[segIndex + 1];
 
-  return [
-    from[0] + (to[0] - from[0]) * local,
-    from[1] + (to[1] - from[1]) * local,
-    from[2] + (to[2] - from[2]) * local
-  ];
+  if (clamped <= 0 || totalDistance <= 0) {
+    return points[0];
+  }
+
+  if (clamped >= 1) {
+    return points[points.length - 1];
+  }
+
+  const targetDistance = clamped * totalDistance;
+
+  for (let index = 1; index < points.length; index += 1) {
+    if (targetDistance > distances[index]) {
+      continue;
+    }
+
+    const from = points[index - 1];
+    const to = points[index];
+    const segmentStartDistance = distances[index - 1];
+    const segmentDistance = distances[index] - segmentStartDistance;
+    const local = segmentDistance === 0 ? 0 : (targetDistance - segmentStartDistance) / segmentDistance;
+
+    return [
+      from[0] + (to[0] - from[0]) * local,
+      from[1] + (to[1] - from[1]) * local,
+      from[2] + (to[2] - from[2]) * local
+    ];
+  }
+
+  return points[points.length - 1];
 };
 
 const CameraController = ({ isTransitioning }) => {
@@ -326,15 +406,21 @@ const CarModel = ({ opacity = 1, isBraking = false }) => {
   );
 };
 
-const ParkingSlot = ({ slot, onClick, canInteract }) => {
+const ParkingSlot = ({ slot, onClick, canInteract, hideParkedCar = false }) => {
   const isOccupied = slot.status === "occupied";
   const color = isOccupied ? "#ff2e4d" : "#0ff180";
 
   return (
-    <group position={slot.position}>
+    <group
+      position={slot.position}
+      onClick={() => {
+        if (canInteract) {
+          onClick(slot);
+        }
+      }}
+    >
       <NeonBox position={[0, 0.05, 0]} color={color} />
       <mesh
-        onClick={() => !isOccupied && canInteract && onClick(slot.id)}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0.02, 0]}
       >
@@ -366,7 +452,7 @@ const ParkingSlot = ({ slot, onClick, canInteract }) => {
         {slot.status === "occupied" ? `${slot.level} OCCUPIED\n${slot.bookedBy || "RESERVED"}` : `${slot.level} AVAILABLE`}
       </Text>
 
-      {isOccupied && (
+      {isOccupied && !hideParkedCar && (
         <group position={[0, 0, 0]} rotation={[0, Math.PI, 0]}>
           <CarModel isBraking={false} />
         </group>
@@ -607,37 +693,50 @@ const LaneCars = ({ parkedCars }) => {
   );
 };
 
-const BookingCarAnimation = ({ targetSlot, animationKey, onArrive }) => {
+const MovingCarAnimation = ({ targetSlot, animationKey, mode = "entry", onArrive }) => {
   const carRef = useRef(null);
   const progressRef = useRef(0);
-  const previousPointRef = useRef(ENTRY_POINT);
+  const previousPointRef = useRef(mode === "exit" ? EXIT_POINT : ENTRY_POINT);
   const arrivedRef = useRef(false);
 
-  const path = useMemo(() => {
+  const pathData = useMemo(() => {
     if (!targetSlot) {
       return null;
     }
-    return buildBookingPath(targetSlot.position);
-  }, [targetSlot, animationKey]);
+
+    return buildPathDistanceData(buildTravelPath(targetSlot.position, mode));
+  }, [targetSlot, animationKey, mode]);
 
   useEffect(() => {
     progressRef.current = 0;
-    previousPointRef.current = ENTRY_POINT;
+    previousPointRef.current =
+      mode === "exit"
+        ? [targetSlot?.position?.[0] ?? EXIT_POINT[0], 0.25, targetSlot?.position?.[2] ?? EXIT_POINT[2]]
+        : ENTRY_POINT;
     arrivedRef.current = false;
 
     if (carRef.current) {
-      carRef.current.position.set(ENTRY_POINT[0], ENTRY_POINT[1], ENTRY_POINT[2]);
+      const start =
+        mode === "exit"
+          ? [targetSlot?.position?.[0] ?? EXIT_POINT[0], 0.25, targetSlot?.position?.[2] ?? EXIT_POINT[2]]
+          : ENTRY_POINT;
+
+      carRef.current.position.set(start[0], start[1], start[2]);
       carRef.current.rotation.set(0, 0, 0);
     }
-  }, [animationKey, targetSlot?.id]);
+  }, [animationKey, targetSlot?.id, mode]);
 
   useFrame((_, delta) => {
-    if (!carRef.current || !path) {
+    if (!carRef.current || !pathData) {
       return;
     }
 
-    progressRef.current = Math.min(1, progressRef.current + delta * 0.24);
-    const currentPoint = samplePolyline(path, progressRef.current);
+    const stableDelta = Math.min(delta, 1 / 30);
+    progressRef.current = Math.min(1, progressRef.current + stableDelta * 0.24);
+    const currentPoint = samplePolylineByDistance(pathData, progressRef.current);
+    if (!currentPoint) {
+      return;
+    }
     const previousPoint = previousPointRef.current;
 
     carRef.current.position.set(currentPoint[0], currentPoint[1], currentPoint[2]);
@@ -652,7 +751,7 @@ const BookingCarAnimation = ({ targetSlot, animationKey, onArrive }) => {
 
     if (progressRef.current >= 1 && !arrivedRef.current) {
       arrivedRef.current = true;
-      onArrive?.(targetSlot.id);
+      onArrive?.(targetSlot.id, mode);
     }
   });
 
@@ -661,17 +760,49 @@ const BookingCarAnimation = ({ targetSlot, animationKey, onArrive }) => {
   }
 
   return (
-    <group ref={carRef} position={ENTRY_POINT}>
+    <group ref={carRef} position={mode === "exit" ? EXIT_POINT : ENTRY_POINT}>
       <CarModel isBraking={false} />
     </group>
+  );
+};
+
+const AnimatedBookingGuideLine = ({ points }) => {
+  const lineRef = useRef(null);
+
+  useFrame(({ clock }) => {
+    if (!lineRef.current?.material) {
+      return;
+    }
+
+    const t = clock.elapsedTime;
+    lineRef.current.material.dashOffset = -t * 0.85;
+    lineRef.current.material.opacity = 0.72 + Math.sin(t * 4.2) * 0.18;
+  });
+
+  if (!points) {
+    return null;
+  }
+
+  return (
+    <Line
+      ref={lineRef}
+      points={points}
+      color="#ffd74d"
+      lineWidth={5}
+      dashed
+      dashSize={1.2}
+      gapSize={0.75}
+      transparent
+      opacity={0.8}
+    />
   );
 };
 
 export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotBooked }) {
   const [triggerAnimation, setTriggerAnimation] = useState(false);
   const [slots, setSlots] = useState(() => cleanSlots(generateParkingSlots()));
-  const [bookingAnimation, setBookingAnimation] = useState(null);
-  const [bookingAnimationKey, setBookingAnimationKey] = useState(0);
+  const [activeAnimation, setActiveAnimation] = useState(null);
+  const [activeAnimationKey, setActiveAnimationKey] = useState(0);
 
   useEffect(() => {
     setTriggerAnimation(true);
@@ -689,9 +820,31 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
     );
   }, [bookingDetails?.slotId]);
 
-  const handleBookSlot = (id) => {
+  const handleSlotAction = (slot) => {
     if (!bookingDetails) {
       alert("Please enter booking details first.");
+      return;
+    }
+
+    if (activeAnimation) {
+      return;
+    }
+
+    if (slot.status === "occupied") {
+      const canExitThisSlot = bookingDetails.slotId === slot.id;
+
+      if (!canExitThisSlot) {
+        alert("You can exit only your currently booked slot.");
+        return;
+      }
+
+      const confirmExit = window.confirm(`Do you want to exit from slot ${slot.id}?`);
+      if (!confirmExit) {
+        return;
+      }
+
+      setActiveAnimation({ slotId: slot.id, type: "exit" });
+      setActiveAnimationKey((prev) => prev + 1);
       return;
     }
 
@@ -700,26 +853,42 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
       return;
     }
 
-    if (bookingAnimation) {
-      return;
-    }
-
-    const selected = slots.find((slot) => slot.id === id);
+    const selected = slots.find((candidate) => candidate.id === slot.id);
     if (!selected || selected.status !== "free") {
       alert("Selected slot is not available.");
       return;
     }
 
-    const confirmBooking = window.confirm(`Do you want to book slot ${id}?`);
+    const confirmBooking = window.confirm(`Do you want to book slot ${slot.id}?`);
     if (!confirmBooking) {
       return;
     }
 
-    setBookingAnimation({ slotId: id });
-    setBookingAnimationKey((prev) => prev + 1);
+    setActiveAnimation({ slotId: slot.id, type: "entry" });
+    setActiveAnimationKey((prev) => prev + 1);
   };
 
-  const handleBookingAnimationArrive = (slotId) => {
+  const handleMovingAnimationArrive = (slotId, mode) => {
+    if (mode === "exit") {
+      setSlots((prev) =>
+        cleanSlots(
+          prev.map((slot) =>
+            slot.id === slotId
+              ? {
+                  ...slot,
+                  status: "free",
+                  bookedBy: ""
+                }
+              : slot
+          )
+        )
+      );
+
+      setActiveAnimation(null);
+      onSlotBooked?.(null);
+      return;
+    }
+
     setSlots((prev) =>
       cleanSlots(
         prev.map((slot) =>
@@ -734,7 +903,7 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
       )
     );
 
-    setBookingAnimation(null);
+    setActiveAnimation(null);
     onSlotBooked?.(slotId);
   };
 
@@ -751,6 +920,31 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
       const slotDistance = Math.hypot(slot.position[0] - ENTRY_POINT[0], slot.position[2] - ENTRY_POINT[2]);
       return slotDistance < bestDistance ? slot : best;
     }, null);
+
+  const bookingTargetSlot = useMemo(
+    () => slots.find((slot) => slot.id === activeAnimation?.slotId) || null,
+    [slots, activeAnimation?.slotId]
+  );
+
+  const bookingGuidePath = useMemo(() => {
+    if (!bookingTargetSlot) {
+      return null;
+    }
+
+    return buildTravelPath(bookingTargetSlot.position, activeAnimation?.type || "entry");
+  }, [bookingTargetSlot, activeAnimation?.type]);
+
+  const animationStatusText = useMemo(() => {
+    if (!activeAnimation?.slotId) {
+      return "";
+    }
+
+    if (activeAnimation.type === "exit") {
+      return `Exiting from ${activeAnimation.slotId}`;
+    }
+
+    return `Parking to ${activeAnimation.slotId}`;
+  }, [activeAnimation]);
 
   const parkedCars = useMemo(
     () => slots.filter((slot) => slot.status === "occupied").map((slot) => slot.position),
@@ -785,6 +979,22 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
           Back
         </button>
         <p style={{ marginTop: "0.5rem", color: "#8fd0ff" }}>Free: {slots.length - occupiedCount} | Occupied: {occupiedCount}</p>
+        {animationStatusText && (
+          <p
+            style={{
+              marginTop: "0.4rem",
+              color: activeAnimation?.type === "exit" ? "#ffd7a6" : "#9fffc6",
+              background: "rgba(6, 14, 24, 0.75)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              borderRadius: "999px",
+              padding: "0.35rem 0.7rem",
+              display: "inline-block",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {animationStatusText}
+          </p>
+        )}
       </div>
 
       <Canvas shadows camera={{ position: [34, 28, 34], fov: 45 }}>
@@ -847,7 +1057,11 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
           ENTRY GATE
         </Text>
 
-        {nearestFreeSlot && (
+        <Text position={[0, 2.2, 26]} fontSize={1.05} color="#ffd09a" outlineWidth={0.05} outlineColor="#000">
+          EXIT GATE
+        </Text>
+
+        {!activeAnimation && nearestFreeSlot && (
           <Line
             points={[
               ENTRY_POINT,
@@ -859,7 +1073,9 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
           />
         )}
 
-        {nearestFreeSlot && (
+        {bookingGuidePath && <AnimatedBookingGuideLine points={bookingGuidePath} />}
+
+        {!activeAnimation && nearestFreeSlot && (
           <Text
             position={[nearestFreeSlot.position[0], nearestFreeSlot.position[1] + 0.2, nearestFreeSlot.position[2] + 3.2]}
             rotation={[-Math.PI / 2, 0, 0]}
@@ -872,14 +1088,21 @@ export default function SmartParkingDashboard({ bookingDetails, onClose, onSlotB
 
         <LaneCars parkedCars={parkedCars} />
 
-        <BookingCarAnimation
-          targetSlot={slots.find((slot) => slot.id === bookingAnimation?.slotId)}
-          animationKey={bookingAnimationKey}
-          onArrive={handleBookingAnimationArrive}
+        <MovingCarAnimation
+          targetSlot={slots.find((slot) => slot.id === activeAnimation?.slotId)}
+          animationKey={activeAnimationKey}
+          mode={activeAnimation?.type || "entry"}
+          onArrive={handleMovingAnimationArrive}
         />
 
         {slots.map((slot) => (
-          <ParkingSlot key={slot.id} slot={slot} onClick={handleBookSlot} canInteract={!bookingAnimation} />
+          <ParkingSlot
+            key={slot.id}
+            slot={slot}
+            onClick={handleSlotAction}
+            canInteract={!activeAnimation}
+            hideParkedCar={activeAnimation?.type === "exit" && activeAnimation?.slotId === slot.id}
+          />
         ))}
 
         <ContactShadows position={[0, 0, 0]} opacity={0.32} scale={100} blur={2.6} far={14} />
